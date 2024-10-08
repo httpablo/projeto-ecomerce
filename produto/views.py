@@ -1,18 +1,21 @@
-from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse
+from django.shortcuts import render, redirect, reverse, get_object_or_404
 from django.views.generic.list import ListView
 from django.views.generic.detail import DetailView
 from django.views import View
 from django.http import HttpResponse
-from . import models
 from django.contrib import messages
+from . import models
+from perfil.models import Perfil
+
+# TODO: Remover .
+from pprint import pprint
+
 
 class ListaProdutos(ListView):
     model = models.Produto
     template_name = 'produto/lista.html'
     context_object_name = 'produtos'
     paginate_by = 10
-    ordering = ['nome']
 
 
 class DetalheProduto(DetailView):
@@ -24,6 +27,7 @@ class DetalheProduto(DetailView):
 
 class AdicionarAoCarrinho(View):
     def get(self, *args, **kwargs):
+        # TODO: Remover linhas abaixo .
         # if self.request.session.get('carrinho'):
         #     del self.request.session['carrinho']
         #     self.request.session.save()
@@ -117,6 +121,7 @@ class AdicionarAoCarrinho(View):
 
         return redirect(http_referer)
 
+
 class RemoverDoCarrinho(View):
     def get(self, *args, **kwargs):
         http_referer = self.request.META.get(
@@ -124,21 +129,21 @@ class RemoverDoCarrinho(View):
             reverse('produto:lista')
         )
         variacao_id = self.request.GET.get('vid')
-        
+
         if not variacao_id:
             return redirect(http_referer)
-        
+
         if not self.request.session.get('carrinho'):
             return redirect(http_referer)
 
         if variacao_id not in self.request.session['carrinho']:
             return redirect(http_referer)
-        
+
         carrinho = self.request.session['carrinho'][variacao_id]
 
-        messages.success (
+        messages.success(
             self.request,
-            f'Produto {carrinho["produto_nome"]} {carrinho['variacao_name']} '
+            f'Produto {carrinho["produto_nome"]} {carrinho["variacao_name"]} '
             f'removido do seu carrinho.'
         )
 
@@ -146,14 +151,40 @@ class RemoverDoCarrinho(View):
         self.request.session.save()
         return redirect(http_referer)
 
+
 class Carrinho(View):
     def get(self, *args, **kwargs):
         contexto = {
             'carrinho': self.request.session.get('carrinho', {})
         }
+
         return render(self.request, 'produto/carrinho.html', contexto)
 
 
 class ResumoDaCompra(View):
     def get(self, *args, **kwargs):
-        return HttpResponse('Finalizar')
+        if not self.request.user.is_authenticated:
+            return redirect('perfil:criar')
+
+        perfil = Perfil.objects.filter(usuario=self.request.user).exists()
+
+        if not perfil:
+            messages.error(
+                self.request,
+                'Usuário sem perfil.'
+            )
+            return redirect('perfil:criar')
+
+        if not self.request.session.get('carrinho'):
+            messages.error(
+                self.request,
+                'Carrinho vazio.'
+            )
+            return redirect('produto:lista')
+
+        contexto = {
+            'usuario': self.request.user,
+            'carrinho': self.request.session['carrinho'],
+        }
+
+        return render(self.request, 'produto/resumodacompra.html', contexto)
